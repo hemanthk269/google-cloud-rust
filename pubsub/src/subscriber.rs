@@ -264,14 +264,13 @@ async fn handle_message(
     let mut nack_targets = vec![];
     let mut nack_message_ids = vec![];
     let msgs_len = messages.len();
-    let all_message_ids = messages.iter().map(|m| m.message.clone().unwrap().message_id).collect::<Vec<_>>().join(",");
-    println!("len, all_message_ids: {msgs_len}, {all_message_ids}");
     for received_message in messages {
         if let Some(message) = received_message.message {
             let id = message.message_id.clone();
+            let ack_id = received_message.ack_id.clone();
             let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
                 .expect("Time went backwards");
-            println!("{:?} message received: msg_id={:?}", time.as_secs(), id);
+            println!("{:?} {} message received: msg_id={:?}, {:?}", time.as_secs(), msgs_len, id, ack_id);
             tracing::debug!("message received: msg_id={id}");
             let msg = ReceivedMessage::new(
                 subscription.to_string(),
