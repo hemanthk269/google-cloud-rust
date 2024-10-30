@@ -261,6 +261,7 @@ async fn handle_message(
     subscription: &str,
     messages: Vec<InternalReceivedMessage>,
 ) -> usize {
+    println!("handle_message: {:?}", messages.len());
     let mut nack_targets = vec![];
     for received_message in messages {
         if let Some(message) = received_message.message {
@@ -274,15 +275,25 @@ async fn handle_message(
                 (received_message.delivery_attempt > 0).then_some(received_message.delivery_attempt as usize),
             );
             let should_nack = select! {
-                result = queue.send(msg) => result.is_err(),
-                _ = cancel.cancelled() => true
+                result = queue.send(msg) => {
+                    if result.is_err() {
+                        println!("nack due to queue error: {:?} {:?}", id, result);
+                    }
+                    result.is_err()
+                }
+                _ = cancel.cancelled() => {
+                    println!("nack due to cancel {:?}", id);
+                    true
+                }
             };
             if should_nack {
                 tracing::info!("cancelled -> so nack immediately : msg_id={id}");
+                println!("cancelled -> so nack immediately : msg_id={id}");
                 nack_targets.push(received_message.ack_id);
             }
         }
     }
+    println!("handle_message: nack_targets len={:?}", nack_targets.len());
     let size = nack_targets.len();
     if size > 0 {
         // Nack immediately although the queue is closed only when the cancellation token is closed.
