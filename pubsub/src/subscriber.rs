@@ -266,6 +266,9 @@ async fn handle_message(
     for received_message in messages {
         if let Some(message) = received_message.message {
             let id = message.message_id.clone();
+            let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards");
+            println!("{:?} message received: msg_id={:?}", time.as_secs(), id);
             tracing::debug!("message received: msg_id={id}");
             let msg = ReceivedMessage::new(
                 subscription.to_string(),
@@ -277,12 +280,14 @@ async fn handle_message(
             let should_nack = select! {
                 result = queue.send(msg) => {
                     if result.is_err() {
-                        println!("nack due to queue error: {:?} {:?}", id, result);
+                        println!("{:?} nack due to queue error: {:?} {:?}", time.as_secs(), id, result);
+                    } else {
+                        println!("{:?} sent to queue successfully: {:?}", time.as_secs(), id);
                     }
                     result.is_err()
                 }
                 _ = cancel.cancelled() => {
-                    println!("nack due to cancel {:?}", id);
+                    println!("{:?} nack due to cancel {:?}", time.as_secs(), id);
                     true
                 }
             };
@@ -294,7 +299,9 @@ async fn handle_message(
     }
     let size = nack_targets.len();
     if size > 0 {
-        println!("handle_message: nack_targets len={:?}, msgs_len={:?}", nack_targets.len(), msgs_len);
+        let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .expect("Time went backwards");
+        println!("{:?} handle_message: nack_targets len={:?}, msgs_len={:?}", time.as_secs(), nack_targets.len(), msgs_len);
         // Nack immediately although the queue is closed only when the cancellation token is closed.
         if let Err(err) = nack(client, subscription.to_string(), nack_targets).await {
             tracing::error!(
