@@ -262,7 +262,10 @@ async fn handle_message(
     messages: Vec<InternalReceivedMessage>,
 ) -> usize {
     let mut nack_targets = vec![];
+    let mut nack_message_ids = vec![];
     let msgs_len = messages.len();
+    let all_message_ids = messages.iter().map(|m| m.message.clone().unwrap().message_id).collect::<Vec<_>>().join(",");
+    println!("len, all_message_ids: {msgs_len}, {all_message_ids}");
     for received_message in messages {
         if let Some(message) = received_message.message {
             let id = message.message_id.clone();
@@ -294,6 +297,7 @@ async fn handle_message(
             if should_nack {
                 tracing::info!("cancelled -> so nack immediately : msg_id={id}");
                 nack_targets.push(received_message.ack_id);
+                nack_message_ids.push(id);
             }
         }
     }
@@ -301,6 +305,10 @@ async fn handle_message(
     if size > 0 {
         let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
             .expect("Time went backwards");
+        for i in 0..size {
+            println!("nack msg_id: {:?}", nack_message_ids[i]);
+            println!("nack ack_id: {:?}", nack_targets[i]);
+        }
         println!("{:?} handle_message: nack_targets len={:?}, msgs_len={:?}", time.as_secs(), nack_targets.len(), msgs_len);
         // Nack immediately although the queue is closed only when the cancellation token is closed.
         if let Err(err) = nack(client, subscription.to_string(), nack_targets).await {
