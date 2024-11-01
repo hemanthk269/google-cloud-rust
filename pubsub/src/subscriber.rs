@@ -267,10 +267,6 @@ async fn handle_message(
     for received_message in messages {
         if let Some(message) = received_message.message {
             let id = message.message_id.clone();
-            let ack_id = received_message.ack_id.clone();
-            let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("Time went backwards");
-            println!("{:?} {} message received: msg_id={:?}, {:?}", time.as_secs(), msgs_len, id, ack_id);
             tracing::debug!("message received: msg_id={id}");
             let msg = ReceivedMessage::new(
                 subscription.to_string(),
@@ -280,18 +276,8 @@ async fn handle_message(
                 (received_message.delivery_attempt > 0).then_some(received_message.delivery_attempt as usize),
             );
             let should_nack = select! {
-                result = queue.send(msg) => {
-                    if result.is_err() {
-                        println!("{:?} nack due to queue error: {:?} {:?}", time.as_secs(), id, result);
-                    } else {
-                        println!("{:?} sent to queue successfully: {:?}", time.as_secs(), id);
-                    }
-                    result.is_err()
-                }
-                _ = cancel.cancelled() => {
-                    println!("{:?} nack due to cancel {:?}", time.as_secs(), id);
-                    true
-                }
+                result = queue.send(msg) => result.is_err(),
+                _ = cancel.cancelled() => true
             };
             if should_nack {
                 tracing::info!("cancelled -> so nack immediately : msg_id={id}");
@@ -305,8 +291,7 @@ async fn handle_message(
         let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
             .expect("Time went backwards");
         for i in 0..size {
-            println!("nack msg_id: {:?}", nack_message_ids[i]);
-            println!("nack ack_id: {:?}", nack_targets[i]);
+            println!("nack msg_id: {:?} nack ack_id: {:?}", nack_message_ids[i], nack_targets[i]);
         }
         println!("{:?} handle_message: nack_targets len={:?}, msgs_len={:?}", time.as_secs(), nack_targets.len(), msgs_len);
         // Nack immediately although the queue is closed only when the cancellation token is closed.
